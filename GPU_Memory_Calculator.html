@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU Memory Calculator & Optimization Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & tokens ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* site chrome */
+  --nav-bg:   #0f172a;
+  --nav-h:    52px;
+  /* calculator panel */
+  --c-bg:     #0a0f1e;
+  --c-s:      #0e1628;
+  --c-card:   #111f35;
+  --c-bd:     #1a2744;
+  --c-a:      #4f9eff;
+  --c-a2:     #7c5cfc;
+  --c-g:      #22c55e;
+  --c-y:      #eab308;
+  --c-r:      #ef4444;
+  --c-tx:     #dde4f0;
+  --c-mu:     #5e7a9e;
+  --c-so:     #8ba3c1;
+  /* guide panel */
+  --g-bg:     #ffffff;
+  --g-tx:     #1f2937;
+  --g-mu:     #6b7280;
+  --g-rule:   #e5e7eb;
+  --g-navy:   #1e3a5f;
+  --g-blue:   #2563eb;
+  --g-teal:   #0e7490;
+  --g-code:   #f3f4f6;
+  --g-codeT:  #111827;
+  --g-noteB:  #eff6ff;
+  --g-noteBd: #3b82f6;
+  --g-warnB:  #fffbeb;
+  --g-warnBd: #b45309;
+  --g-row1:   #f9fafb;
+  /* shared */
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --radius: 6px;
+  --shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+}
+
+html, body { height: 100%; }
+body { font-family: var(--sans); background: var(--nav-bg); color: var(--c-tx); }
+
+/* ── Nav ──────────────────────────────────────────────────────────────── */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--nav-bg);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  height: var(--nav-h);
+  display: flex; align-items: center;
+  padding: 0 20px;
+  gap: 24px;
+}
+.nav-brand {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  color: #e2e8f0; letter-spacing: -.2px; white-space: nowrap;
+}
+.nav-brand span { color: var(--c-a); }
+.nav-tabs { display: flex; gap: 4px; margin-left: 8px; }
+.nav-tab {
+  background: transparent; border: none; border-radius: 5px;
+  color: var(--c-mu); cursor: pointer; font-family: var(--mono);
+  font-size: 12.5px; font-weight: 500; padding: 6px 14px;
+  transition: all .15s;
+}
+.nav-tab:hover { background: rgba(255,255,255,.06); color: var(--c-so); }
+.nav-tab.active { background: rgba(79,158,255,.15); color: var(--c-a); }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.nav-link {
+  font-family: var(--mono); font-size: 11px; color: var(--c-mu);
+  text-decoration: none; display: flex; align-items: center; gap: 5px;
+  transition: color .15s;
+}
+.nav-link:hover { color: var(--c-so); }
+.nav-link svg { width: 15px; height: 15px; fill: currentColor; }
+.dl-btn {
+  background: rgba(79,158,255,.1); border: 1px solid rgba(79,158,255,.3);
+  border-radius: 4px; color: var(--c-a); cursor: pointer;
+  font-family: var(--mono); font-size: 11px; padding: 4px 10px;
+  text-decoration: none; display: flex; align-items: center; gap: 5px;
+  transition: all .15s;
+}
+.dl-btn:hover { background: rgba(79,158,255,.2); }
+
+/* ── Panels ───────────────────────────────────────────────────────────── */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── CALCULATOR PANEL ─────────────────────────────────────────────────── */
+#calc-panel {
+  background: var(--c-bg);
+  min-height: calc(100vh - var(--nav-h));
+  padding: 18px 20px;
+}
+.calc-wrap {
+  display: grid; grid-template-columns: 330px 1fr; gap: 14px;
+  max-width: 1000px; margin: 0 auto;
+}
+.ccard { background: var(--c-card); border: 1px solid var(--c-bd); border-radius: 8px; padding: 14px; }
+.ccard + .ccard { margin-top: 11px; }
+.cct {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 600;
+  letter-spacing: 1.6px; text-transform: uppercase; color: var(--c-a);
+  margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--c-bd);
+}
+.csec { font-size: 9px; font-weight: 600; letter-spacing: 1.1px; text-transform: uppercase; color: var(--c-mu); margin: 11px 0 6px; }
+.csec:first-of-type { margin-top: 0; }
+.cfield { margin-bottom: 8px; }
+.cfield label { display: flex; justify-content: space-between; font-size: 10px; color: var(--c-so); margin-bottom: 3px; }
+.cfield label .v { color: var(--c-a); font-weight: 600; }
+input[type=range] { -webkit-appearance: none; width: 100%; height: 2px; background: var(--c-bd); border-radius: 1px; outline: none; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--c-a); cursor: pointer; box-shadow: 0 0 5px rgba(79,158,255,.5); }
+.cnum { background: var(--c-s); border: 1px solid var(--c-bd); border-radius: 4px; color: var(--c-tx); font-family: var(--mono); font-size: 11px; padding: 4px 7px; width: 100%; outline: none; transition: border-color .15s; }
+.cnum:focus { border-color: var(--c-a); }
+.cr3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+.cfml label { display: block; font-size: 9px; color: var(--c-mu); margin-bottom: 3px; }
+/* pills */
+.pills { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 9px; }
+.pill { background: var(--c-s); border: 1px solid var(--c-bd); border-radius: 3px; color: var(--c-mu); cursor: pointer; font-family: var(--mono); font-size: 9px; padding: 3px 8px; transition: all .12s; }
+.pill:hover { border-color: var(--c-a); color: var(--c-so); }
+.pill.on { background: rgba(79,158,255,.1); border-color: var(--c-a); color: var(--c-a); font-weight: 600; }
+.pill.cnn.on { background: rgba(234,179,8,.08); border-color: var(--c-y); color: var(--c-y); }
+.pill.hyb.on { background: rgba(167,139,250,.08); border-color: #a78bfa; color: #a78bfa; }
+/* toggles */
+.togrow { display: flex; align-items: center; justify-content: space-between; background: var(--c-s); border: 1px solid var(--c-bd); border-radius: 4px; padding: 5px 9px; margin-bottom: 5px; font-size: 10px; color: var(--c-so); }
+.tog { position: relative; width: 28px; height: 15px; background: var(--c-bd); border-radius: 7px; cursor: pointer; transition: background .18s; flex-shrink: 0; }
+.tog.on { background: var(--c-a); }
+.tog::after { content: ''; position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #fff; top: 3px; left: 3px; transition: transform .18s; }
+.tog.on::after { transform: translateX(13px); }
+.accdet { display: flex; align-items: center; justify-content: space-between; background: rgba(79,158,255,.06); border: 1px solid rgba(79,158,255,.2); border-radius: 4px; padding: 4px 9px; margin-bottom: 5px; font-size: 9.5px; color: var(--c-a); }
+.accdet input { width: 50px; text-align: center; }
+/* category tabs */
+.cat-tabs { display: flex; gap: 3px; margin-bottom: 9px; flex-wrap: wrap; }
+.cat-tab { background: var(--c-s); border: 1px solid var(--c-bd); border-radius: 3px; color: var(--c-mu); cursor: pointer; font-family: var(--mono); font-size: 9px; padding: 3px 8px; transition: all .12s; }
+.cat-tab:hover { border-color: var(--c-a); color: var(--c-so); }
+.cat-tab.on { background: rgba(79,158,255,.12); border-color: var(--c-a); color: var(--c-a); font-weight: 600; }
+/* presets */
+.pg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.pre { background: var(--c-s); border: 1px solid var(--c-bd); border-radius: 4px; cursor: pointer; font-family: var(--mono); padding: 5px 7px; text-align: left; transition: border-color .12s; display: none; }
+.pre.show { display: block; }
+.pre .pn { font-size: 10px; font-weight: 600; color: var(--c-tx); }
+.pre .pm { font-size: 8px; color: var(--c-mu); margin-top: 1px; }
+.pre .pt { display: inline-block; font-size: 7.5px; padding: 1px 4px; border-radius: 2px; margin-top: 2px; font-weight: 600; }
+.cnn-p:hover { border-color: var(--c-y); } .cnn-p .pt { background: rgba(234,179,8,.12); color: var(--c-y); }
+.hyb-p:hover { border-color: #a78bfa; }    .hyb-p .pt { background: rgba(167,139,250,.12); color: #a78bfa; }
+.xfm-p:hover { border-color: var(--c-a); } .xfm-p .pt { background: rgba(79,158,255,.12); color: var(--c-a); }
+.seg-p:hover { border-color: var(--c-g); } .seg-p .pt { background: rgba(34,197,94,.12); color: var(--c-g); }
+/* hero */
+.hero { background: var(--c-s); border-radius: 6px; padding: 13px; text-align: center; margin-bottom: 10px; position: relative; overflow: hidden; }
+.hero::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(79,158,255,.03), rgba(124,92,252,.03)); pointer-events: none; }
+.hero .lbl { font-size: 8.5px; color: var(--c-mu); letter-spacing: 1.2px; text-transform: uppercase; }
+.hero .tot { font-family: var(--sans); font-size: 40px; font-weight: 700; line-height: 1.05; margin: 4px 0 3px; transition: color .3s; }
+.hero .sub { font-size: 9px; color: var(--c-mu); line-height: 1.7; }
+/* stacked bar */
+.sbar { height: 11px; background: var(--c-s); border-radius: 3px; overflow: hidden; display: flex; margin-bottom: 4px; }
+.bseg { height: 100%; transition: width .3s ease; }
+.leg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.li { display: flex; align-items: center; gap: 3px; font-size: 9px; color: var(--c-mu); }
+.ld { width: 6px; height: 6px; border-radius: 1px; flex-shrink: 0; }
+/* gpu chips */
+.gg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 10px; }
+.gc { border: 1px solid var(--c-bd); border-radius: 4px; padding: 5px 4px; text-align: center; }
+.gc .gn { font-size: 8px; color: var(--c-mu); font-weight: 600; }
+.gc .gv { font-size: 10.5px; font-weight: 700; margin: 2px 0 1px; }
+.gc .gi { font-size: 8.5px; }
+.gc.fits { border-color: var(--c-g); background: rgba(34,197,94,.07); } .gc.fits .gv, .gc.fits .gi { color: var(--c-g); }
+.gc.tight { border-color: var(--c-y); background: rgba(234,179,8,.07); } .gc.tight .gv, .gc.tight .gi { color: var(--c-y); }
+.gc.nope { opacity: .3; } .gc.nope .gv { color: var(--c-mu); }
+/* breakdown */
+.bdr { display: grid; grid-template-columns: 1fr 52px 62px; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.03); font-size: 10px; }
+.bdr:last-child { border-bottom: none; }
+.bn { color: var(--c-so); } .bw { height: 4px; background: var(--c-bd); border-radius: 2px; overflow: hidden; } .bb { height: 100%; border-radius: 2px; transition: width .3s; } .bval { text-align: right; font-weight: 600; color: var(--c-tx); }
+/* formula note */
+.fnote { font-size: 9px; color: var(--c-mu); background: var(--c-s); border: 1px solid var(--c-bd); border-radius: 3px; padding: 6px 9px; margin-top: 8px; line-height: 1.7; }
+.fnote code { color: var(--c-so); }
+/* tips */
+.ctips { background: rgba(79,158,255,.05); border: 1px solid rgba(79,158,255,.18); border-radius: 5px; padding: 8px 10px; font-size: 9.5px; color: var(--c-so); line-height: 1.7; }
+.ctips strong { color: var(--c-a); }
+.ctip + .ctip { margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(79,158,255,.1); }
+.chr { border: none; border-top: 1px solid var(--c-bd); margin: 8px 0; }
+
+/* ── GUIDE PANEL ──────────────────────────────────────────────────────── */
+#guide-panel {
+  background: var(--g-bg);
+  min-height: calc(100vh - var(--nav-h));
+}
+.guide-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  max-width: 1100px;
+  margin: 0 auto;
+  gap: 0;
+}
+/* sidebar TOC */
+.g-toc {
+  position: sticky; top: var(--nav-h);
+  height: calc(100vh - var(--nav-h));
+  overflow-y: auto;
+  padding: 24px 16px;
+  border-right: 1px solid var(--g-rule);
+  background: #f9fafb;
+}
+.g-toc-title { font-size: 10px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: var(--g-mu); margin-bottom: 12px; }
+.g-toc a { display: block; font-size: 12.5px; color: var(--g-mu); text-decoration: none; padding: 4px 8px; border-radius: 4px; margin-bottom: 2px; transition: all .12s; line-height: 1.4; }
+.g-toc a:hover { background: var(--g-rule); color: var(--g-tx); }
+.g-toc a.h2 { font-weight: 600; color: var(--g-navy); }
+.g-toc a.h3 { padding-left: 20px; font-size: 11.5px; }
+/* main guide content */
+.g-body { padding: 40px 52px 80px; max-width: 780px; }
+.g-body h1 {
+  font-size: 22px; font-weight: 700; color: #fff;
+  background: var(--g-navy); padding: 12px 18px; border-radius: 5px;
+  margin: 40px 0 18px; line-height: 1.3; letter-spacing: -.2px;
+}
+.g-body h1:first-child { margin-top: 0; }
+.g-body h2 {
+  font-size: 18px; font-weight: 700; color: var(--g-navy);
+  border-bottom: 3px solid var(--g-blue); padding-bottom: 6px;
+  margin: 36px 0 14px;
+}
+.g-body h3 {
+  font-size: 15px; font-weight: 700; color: var(--g-teal);
+  margin: 28px 0 10px;
+}
+.g-body p {
+  font-size: 14.5px; line-height: 1.75; color: var(--g-tx);
+  margin-bottom: 14px;
+}
+.g-body p.intro {
+  font-size: 15px; line-height: 1.8; color: #374151;
+  border-left: 3px solid var(--g-rule); padding-left: 16px;
+  margin-bottom: 20px;
+}
+.g-body strong { font-weight: 700; color: var(--g-tx); }
+.g-body em { color: var(--g-mu); font-style: italic; }
+/* code */
+.g-body pre {
+  background: var(--g-code); border: 1px solid var(--g-rule);
+  border-radius: 5px; padding: 16px 18px; margin: 14px 0 18px;
+  overflow-x: auto;
+}
+.g-body pre code {
+  font-family: var(--mono); font-size: 12.5px; color: var(--g-codeT);
+  line-height: 1.65;
+}
+.g-body code {
+  font-family: var(--mono); font-size: 12.5px; color: var(--g-teal);
+  background: var(--g-code); padding: 1px 5px; border-radius: 3px;
+}
+/* inline callouts */
+.note {
+  border-left: 4px solid var(--g-noteBd); background: var(--g-noteB);
+  padding: 10px 14px; margin: 14px 0 18px; border-radius: 0 4px 4px 0;
+  font-size: 13.5px; color: var(--g-tx); line-height: 1.65;
+}
+.warn {
+  border-left: 4px solid var(--g-warnBd); background: var(--g-warnB);
+  padding: 10px 14px; margin: 14px 0 18px; border-radius: 0 4px 4px 0;
+  font-size: 13.5px; color: var(--g-tx); line-height: 1.65;
+}
+/* tables */
+.g-body table { width: 100%; border-collapse: collapse; margin: 14px 0 20px; font-size: 13px; }
+.g-body th { background: var(--g-navy); color: #fff; font-weight: 600; text-align: left; padding: 8px 12px; font-size: 12.5px; }
+.g-body td { padding: 8px 12px; border-bottom: 1px solid var(--g-rule); color: var(--g-tx); vertical-align: top; line-height: 1.55; }
+.g-body tr:nth-child(even) td { background: var(--g-row1); }
+/* formula table */
+.ftable { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; }
+.ftable td { padding: 8px 12px; border: 1px solid var(--g-rule); vertical-align: top; line-height: 1.55; }
+.ftable tr:nth-child(odd) td:first-child { background: #eff6ff; }
+.ftable tr:nth-child(even) td:first-child { background: #e8f4fd; }
+.ftable td:first-child { font-weight: 700; color: var(--g-navy); text-align: right; width: 180px; font-size: 12.5px; }
+.ftable td:last-child code { display: block; font-family: var(--mono); font-size: 12.5px; color: var(--g-teal); font-weight: 600; margin-bottom: 3px; }
+.ftable td:last-child em { font-size: 11.5px; color: var(--g-mu); }
+/* numbered steps */
+.steps { counter-reset: step; list-style: none; margin: 14px 0 18px; }
+.steps li { counter-increment: step; display: flex; gap: 14px; margin-bottom: 20px; align-items: flex-start; }
+.steps li::before { content: counter(step); min-width: 26px; height: 26px; background: var(--g-navy); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.steps li .scontent { flex: 1; }
+.steps li .scontent strong { display: block; font-size: 14.5px; margin-bottom: 6px; color: var(--g-navy); }
+.steps li .scontent p { margin: 0 0 8px; font-size: 13.5px; }
+/* bullets */
+.g-body ul { margin: 10px 0 16px 0; padding-left: 0; list-style: none; }
+.g-body ul li { font-size: 14px; color: var(--g-tx); line-height: 1.7; margin-bottom: 8px; padding-left: 20px; position: relative; }
+.g-body ul li::before { content: "•"; position: absolute; left: 4px; color: var(--g-blue); }
+/* divider */
+.g-rule { border: none; border-top: 1px solid var(--g-rule); margin: 40px 0; }
+/* responsive */
+@media (max-width: 768px) {
+  .calc-wrap { grid-template-columns: 1fr; }
+  .guide-layout { grid-template-columns: 1fr; }
+  .g-toc { display: none; }
+  .g-body { padding: 24px 20px 60px; }
+  nav { padding: 0 12px; gap: 12px; }
+  .nav-brand { font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Navigation ────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-brand">gpu<span>·</span>guide</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPanel('calc')">Calculator</button>
+    <button class="nav-tab" onclick="showPanel('guide')">Optimization Guide</button>
+  </div>
+  <div class="nav-right">
+    <a href="https://github.com" class="nav-link" id="gh-link" target="_blank" rel="noopener">
+      <svg viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a href="GPU_Optimization_Guide.docx" class="dl-btn" download>
+      ↓ Download .docx
+    </a>
+  </div>
+</nav>
+
+<!-- ── Calculator Panel ────────────────────────────────────────────────── -->
+<div id="calc-panel" class="panel active">
+<div style="max-width:1000px;margin:0 auto;padding:14px 20px 6px">
+  <div style="font-size:10.5px;color:var(--c-mu);margin-bottom:14px">
+    Estimate peak VRAM before you run &nbsp;·&nbsp; 23 model presets &nbsp;·&nbsp; SAM · SAM2 · DINOv2 · CLIP &nbsp;·&nbsp; Batch up to 2048
+    <span style="float:right;font-size:9px">sf factors: CNN=20 &nbsp;·&nbsp; Hybrid=10 &nbsp;·&nbsp; Transformer=50</span>
+  </div>
+</div>
+<div class="calc-wrap" style="padding:0 20px 24px">
+
+<!-- Left: inputs -->
+<div>
+  <div class="ccard">
+    <div class="cct">Model Presets</div>
+    <div class="cat-tabs" id="ct">
+      <button class="cat-tab on" data-cat="all">All</button>
+      <button class="cat-tab" data-cat="cls">Classification</button>
+      <button class="cat-tab" data-cat="seg">Segmentation</button>
+      <button class="cat-tab" data-cat="found">Foundation</button>
+    </div>
+    <div class="pg" id="pg"></div>
+  </div>
+
+  <div class="ccard">
+    <div class="cct">Configuration</div>
+    <div class="csec">Architecture</div>
+    <div class="pills" id="ag">
+      <button class="pill cnn" data-val="cnn">CNN</button>
+      <button class="pill hyb on" data-val="hybrid">Hybrid CNN+Attn</button>
+      <button class="pill" data-val="transformer">Transformer</button>
+    </div>
+    <div class="csec">Model Size</div>
+    <div class="cfield"><label>Parameters <span class="v" id="lp">1.3 M</span></label><input type="range" id="params" min="0.1" max="700" step="0.1" value="1.3"></div>
+    <div class="cfield"><label>Avg channels C_avg <span class="v" id="lc">96</span></label><input type="range" id="cavg" min="16" max="1280" step="16" value="96"></div>
+    <div class="cfield"><label>Depth (layers L) <span class="v" id="ll">12</span></label><input type="range" id="layers" min="2" max="120" step="1" value="12"></div>
+    <div class="csec">Precision</div>
+    <div class="pills" id="pg2">
+      <button class="pill" data-val="fp32">FP32</button>
+      <button class="pill on" data-val="amp">AMP / FP16</button>
+      <button class="pill" data-val="bf16">BF16</button>
+    </div>
+    <div class="csec">Optimizer</div>
+    <div class="pills" id="og">
+      <button class="pill" data-val="sgd">SGD</button>
+      <button class="pill" data-val="sgdm">SGD+mom</button>
+      <button class="pill on" data-val="adam">Adam/AdamW</button>
+      <button class="pill" data-val="adam8">Adam 8-bit</button>
+      <button class="pill" data-val="adafactor">Adafactor</button>
+    </div>
+    <div class="csec">Input Shape</div>
+    <div class="cr3">
+      <div class="cfml"><label>Height</label><input type="number" id="imgH" value="256" min="32" max="4096" step="32" class="cnum"></div>
+      <div class="cfml"><label>Width</label><input type="number" id="imgW" value="256" min="32" max="4096" step="32" class="cnum"></div>
+      <div class="cfml"><label>Channels</label><input type="number" id="imgC" value="3" min="1" max="16" class="cnum"></div>
+    </div>
+    <div class="cfield"><label>Batch Size <span class="v" id="lb">32</span></label><input type="range" id="batch" min="1" max="2048" step="1" value="32"></div>
+    <div class="csec">Techniques</div>
+    <div class="togrow"><span>Gradient Checkpointing</span><div class="tog" id="t-ckpt" onclick="tog('ckpt')"></div></div>
+    <div class="togrow"><span>Frozen Backbone (~80% layers)</span><div class="tog" id="t-frozen" onclick="tog('frozen')"></div></div>
+    <div class="togrow"><span>Gradient Accumulation</span><div class="tog" id="t-accum" onclick="tog('accum')"></div></div>
+    <div class="accdet" id="accdet" style="display:none"><span>Accumulation Steps K</span><input type="number" id="accumK" value="4" min="2" max="512" class="cnum" style="width:50px;text-align:center"></div>
+    <div class="togrow"><span>Pin Memory + Prefetch Buffer</span><div class="tog" id="t-prefetch" onclick="tog('prefetch')"></div></div>
+  </div>
+</div>
+
+<!-- Right: results -->
+<div>
+  <div class="ccard">
+    <div class="cct">Peak VRAM Estimate</div>
+    <div class="hero">
+      <div class="lbl">Total GPU Memory Required</div>
+      <div class="tot" id="tot">— GB</div>
+      <div class="sub" id="sub">—</div>
+    </div>
+    <div style="font-size:8.5px;color:var(--c-mu);margin-bottom:4px;letter-spacing:.5px">MEMORY COMPOSITION</div>
+    <div class="sbar" id="sb"></div>
+    <div class="leg" id="leg"></div>
+    <div style="font-size:8.5px;color:var(--c-mu);margin-bottom:6px;letter-spacing:.5px">GPU COMPATIBILITY &nbsp;·&nbsp; ✓ fits with margin &nbsp; ~ tight &nbsp; ✗ exceeds</div>
+    <div class="gg" id="gg"></div>
+    <div class="fnote" id="fn">—</div>
+  </div>
+  <div class="ccard">
+    <div class="cct">Memory Breakdown</div>
+    <div id="bd"></div>
+    <hr class="chr">
+    <div class="ctips" id="tips">—</div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ── Guide Panel ─────────────────────────────────────────────────────── -->
+<div id="guide-panel" class="panel">
+<div class="guide-layout">
+  <!-- Sidebar TOC -->
+  <nav class="g-toc">
+    <div class="g-toc-title">Contents</div>
+    <a href="#s0" class="h2">0. Start Here</a>
+    <a href="#s0-amp" class="h3">1. Enable AMP</a>
+    <a href="#s0-dl" class="h3">2. Fix the DataLoader</a>
+    <a href="#s0-nograd" class="h3">3. no_grad() in eval</a>
+    <a href="#s0-item" class="h3">4. Use .item()</a>
+    <a href="#s0-mem" class="h3">5. Check memory</a>
+    <a href="#s1" class="h2">1. What Is GPU Memory?</a>
+    <a href="#s1-res" class="h3">Resolution is quadratic</a>
+    <a href="#s1-budget" class="h3">The memory budget</a>
+    <a href="#s2" class="h2">2. Mixed-Precision (AMP)</a>
+    <a href="#s2-scaler" class="h3">Why there's a GradScaler</a>
+    <a href="#s2-optim" class="h3">Optimizer memory</a>
+    <a href="#s3" class="h2">3. Batch & DataLoader</a>
+    <a href="#s3-accum" class="h3">Gradient accumulation</a>
+    <a href="#s3-dl" class="h3">DataLoader settings</a>
+    <a href="#s3-prefetch" class="h3">CUDA prefetcher</a>
+    <a href="#s4" class="h2">4. Advanced Techniques</a>
+    <a href="#s4-ckpt" class="h3">Gradient checkpointing</a>
+    <a href="#s4-freeze" class="h3">Frozen backbone</a>
+    <a href="#s4-compile" class="h3">torch.compile()</a>
+    <a href="#s5" class="h2">5. Classification vs. Segmentation</a>
+    <a href="#s5-seg" class="h3">Segmentation memory</a>
+    <a href="#s5-sam" class="h3">SAM and SAM2</a>
+    <a href="#s6" class="h2">6. When Things Go Wrong</a>
+    <a href="#s6-order" class="h3">Priority order</a>
+    <a href="#s7" class="h2">7. Quick Reference</a>
+  </nav>
+
+  <!-- Main content -->
+  <div class="g-body">
+
+    <p style="font-size:13px;color:var(--g-mu);margin-bottom:32px;padding-bottom:16px;border-bottom:1px solid var(--g-rule)">
+      A practical reference for training PyTorch vision models without running out of memory.
+      Written for people who are new to GPU training — no systems background assumed.
+      Use the <strong>Calculator tab</strong> for specific model and batch size estimates.
+    </p>
+
+    <h1 id="s0">0 — Start Here</h1>
+    <p>Don't read this whole document before you try anything. Apply these five changes first — they resolve the vast majority of GPU problems, and you can come back to understand the why behind each one.</p>
+
+    <ol class="steps">
+      <li id="s0-amp">
+        <div class="scontent">
+          <strong>Turn on mixed-precision training.</strong>
+          <p>This is the single most impactful change you can make. It typically cuts memory by 35–45% and speeds training up 2–3× on any GPU made in the last five years. It takes about five extra lines of code and doesn't change your results.</p>
+          <pre><code>from torch.cuda.amp import autocast, GradScaler
+scaler = GradScaler()
+
+for images, labels in train_loader:
+    optimizer.zero_grad()
+    with autocast():                    # that's it for the forward pass
+        loss = criterion(model(images), labels)
+    scaler.scale(loss).backward()       # scaler handles the rest
+    scaler.step(optimizer)
+    scaler.update()</code></pre>
+        </div>
+      </li>
+      <li id="s0-dl">
+        <div class="scontent">
+          <strong>Fix your DataLoader.</strong>
+          <p>By default, PyTorch loads data on a single thread. Your GPU finishes a batch and then sits idle while the CPU loads the next one. A few keyword arguments fix this.</p>
+          <pre><code>import os
+DataLoader(
+    dataset,
+    batch_size         = 32,
+    num_workers        = min(os.cpu_count() // 2, 4),  # was 0
+    pin_memory         = True,
+    prefetch_factor    = 2,
+    persistent_workers = True,
+    drop_last          = True,   # prevents a smaller final batch causing OOM
+)</code></pre>
+        </div>
+      </li>
+      <li id="s0-nograd">
+        <div class="scontent">
+          <strong>Add torch.no_grad() to every validation loop.</strong>
+          <p><code>model.eval()</code> alone is not enough. Without <code>no_grad()</code>, PyTorch still builds the full computation graph during validation — wasting memory you can't afford.</p>
+          <pre><code>model.eval()
+with torch.no_grad():
+    with autocast():            # still worth using during inference
+        outputs = model(images)</code></pre>
+        </div>
+      </li>
+      <li id="s0-item">
+        <div class="scontent">
+          <strong>Use .item() when you log the loss.</strong>
+          <p>If you append the raw loss tensor to a list, you're keeping its entire computation graph in memory. Every epoch, the list grows.</p>
+          <pre><code>losses.append(loss.item())   # correct
+losses.append(loss)          # wrong — graph stays alive</code></pre>
+        </div>
+      </li>
+      <li id="s0-mem">
+        <div class="scontent">
+          <strong>Check memory before a long run.</strong>
+          <p>Two lines tell you how much GPU memory you're actually using vs. how much you've peaked at.</p>
+          <pre><code>print(round(torch.cuda.memory_allocated() / 1e9, 2), 'GB in use')
+print(round(torch.cuda.max_memory_allocated() / 1e9, 2), 'GB peak')</code></pre>
+          <p style="font-size:13px;color:var(--g-mu);font-style:italic">Use the Calculator tab to estimate whether a given model and batch size will fit before you start.</p>
+        </div>
+      </li>
+    </ol>
+
+    <hr class="g-rule">
+    <h1 id="s1">1 — What Is GPU Memory?</h1>
+    <p>Your graphics card has its own dedicated memory — called VRAM — that's completely separate from your computer's RAM. Everything involved in a training step has to fit inside it at once. When it doesn't fit, you get a <code>CUDA out of memory</code> error and the run crashes.</p>
+    <p>Four things consume VRAM during training:</p>
+    <ul>
+      <li><strong>Model parameters.</strong> The weights of the network. Fixed in size once you've picked an architecture.</li>
+      <li><strong>Activations.</strong> Intermediate results saved during the forward pass so the backward pass can compute gradients. Almost always the largest cost — it scales with batch size and image resolution.</li>
+      <li><strong>Gradients.</strong> One gradient value per trainable parameter. Same size as the parameters. Zero for any frozen layer.</li>
+      <li><strong>Optimizer state.</strong> Extra data the optimizer needs. Adam stores two extra tensors per parameter (running averages of past gradients). This can be surprisingly large.</li>
+    </ul>
+
+    <h2 id="s1-res">Resolution is quadratic</h2>
+    <p>If you double the image dimensions, activation memory doesn't double — it quadruples. A 512×512 image requires 16× more activation memory than a 128×128 one. This catches almost everyone off guard the first time.</p>
+    <table class="ftable">
+      <tr><td>Resolution doubles</td><td><code>M_acts → 4×</code><em>Quadratic. The most expensive thing to change.</em></td></tr>
+      <tr><td>Batch size halves</td><td><code>M_acts → ÷ 2</code><em>Linear. Safe first response to an OOM error.</em></td></tr>
+    </table>
+    <p>In practice: if you're hitting OOM, try halving the batch size first. If that doesn't help, try a smaller resolution. Only after both should you reach for more complex techniques.</p>
+
+    <table>
+      <tr><th>Resolution</th><th>Memory (relative to 128px)</th><th>Max batch — 8GB GPU — AMP on</th></tr>
+      <tr><td>128 × 128</td><td>1× — baseline</td><td>128–256</td></tr>
+      <tr><td>224 × 224</td><td>3.1×</td><td>32–64</td></tr>
+      <tr><td>256 × 256</td><td>4×</td><td>32</td></tr>
+      <tr><td>384 × 384</td><td>9×</td><td>8–16</td></tr>
+      <tr><td>512 × 512</td><td>16×</td><td>2–4</td></tr>
+      <tr><td>1024 × 1024 (SAM)</td><td>64×</td><td>1 — often inference only</td></tr>
+    </table>
+
+    <h2 id="s1-budget">The rough memory budget</h2>
+    <p>Before launching an experiment, do a quick estimate. You're just checking whether something will obviously not fit.</p>
+    <table class="ftable">
+      <tr><td>Parameters (FP32)</td><td><code>N × 4 bytes</code><em>N = total parameter count. Fixed.</em></td></tr>
+      <tr><td>Parameters (AMP)</td><td><code>N × 6 bytes</code><em>FP16 working copy (×2) + FP32 master (×4).</em></td></tr>
+      <tr><td>Activations (approx)</td><td><code>B × (H×W ÷ sf) × C × L × 2B × 1.5</code><em>sf: CNN ≈ 20, Hybrid ≈ 10, Transformer ≈ 50</em></td></tr>
+      <tr><td>Gradients</td><td><code>N_trainable × 4B (FP32) or × 2B (AMP)</code><em>Zero for frozen layers.</em></td></tr>
+      <tr><td>Adam states</td><td><code>N_trainable × 8 bytes</code><em>Switch to Adam 8-bit if this is large.</em></td></tr>
+    </table>
+
+    <hr class="g-rule">
+    <h1 id="s2">2 — Mixed-Precision Training (AMP)</h1>
+    <p>Modern GPUs have special hardware — Tensor Cores — that can do matrix multiplication in 16-bit floating point about 2–3× faster than in 32-bit. AMP takes advantage of this automatically, while keeping 32-bit precision for the parts of training where it matters most.</p>
+    <p>The result: activation memory is halved, most training steps run faster, and accuracy is essentially unchanged. See Section 0, Step 1 for the code.</p>
+
+    <table>
+      <tr><th>What changes</th><th>FP32</th><th>AMP</th></tr>
+      <tr><td>Activation memory</td><td>Baseline</td><td>~50% reduction</td></tr>
+      <tr><td>Total VRAM</td><td>Baseline</td><td>~55–65% of FP32</td></tr>
+      <tr><td>Max batch size</td><td>Baseline</td><td>~2× larger possible</td></tr>
+      <tr><td>Training throughput</td><td>Baseline</td><td>1.5–3× faster</td></tr>
+      <tr><td>Accuracy</td><td>Baseline</td><td>Same in practice</td></tr>
+    </table>
+
+    <h2 id="s2-scaler">Why there's a GradScaler</h2>
+    <p>FP16 can't represent very small numbers — anything below about 6×10⁻⁸ just becomes zero. Gradients in deep networks are often in this range, so without a workaround they'd silently vanish. The GradScaler multiplies the loss by a large number before backprop, keeping gradients in FP16's representable range, then divides back out before the optimizer step. It adjusts this scale factor automatically, so you never need to tune it.</p>
+    <div class="note">If you see NaN losses with AMP, don't immediately blame the precision — check your learning rate first. AMP-induced NaNs from gradient underflow are less common than people expect, and are usually caught and skipped automatically by the scaler.</div>
+
+    <h2 id="s2-optim">Optimizer memory</h2>
+    <p>The optimizer is sometimes the second-biggest memory consumer. Adam stores two extra tensors per parameter (first and second moment estimates), both in FP32 regardless of whether you're using AMP. For a model with 300M parameters, that's about 2.4GB just for optimizer state.</p>
+    <table>
+      <tr><th>Optimizer</th><th>Extra per param</th><th>Relative total</th><th>When to use</th></tr>
+      <tr><td>SGD (no momentum)</td><td>nothing</td><td>1×</td><td>Rarely — too slow for most deep networks</td></tr>
+      <tr><td>SGD + momentum</td><td>1 FP32 tensor</td><td>2×</td><td>Simple fine-tuning, tight memory</td></tr>
+      <tr><td>Adam / AdamW</td><td>2 FP32 tensors</td><td>3×</td><td>Standard choice for most work</td></tr>
+      <tr><td>Adam 8-bit</td><td>2 INT8 tensors</td><td>~1.25×</td><td>Drop-in replacement, ~75% less optimizer memory</td></tr>
+      <tr><td>Adafactor</td><td>factored matrix</td><td>~1.1×</td><td>Very large models (1B+ params)</td></tr>
+    </table>
+    <pre><code># Adam 8-bit: pip install bitsandbytes
+import bitsandbytes as bnb
+optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=1e-4)
+# that's literally all you change</code></pre>
+
+    <hr class="g-rule">
+    <h1 id="s3">3 — Batch Size, Accumulation, and DataLoader</h1>
+
+    <h2 id="s3-accum">Gradient accumulation</h2>
+    <p>When your desired batch size doesn't fit in memory, gradient accumulation lets you run several small batches before taking a single optimizer step. The GPU only ever holds one small batch at a time, but the model learns from the combined gradient of all of them.</p>
+    <table class="ftable">
+      <tr><td>Effective batch</td><td><code>B_effective = B_micro × K</code><em>K = steps between optimizer updates</em></td></tr>
+      <tr><td>Memory cost</td><td><code>cost of B_micro — not B_effective</code><em>GPU never sees the full effective batch at once</em></td></tr>
+      <tr><td>Learning rate</td><td><code>scale LR by (B_effective / original B)</code><em>keep training dynamics equivalent</em></td></tr>
+    </table>
+    <pre><code>K = 8                          # pretend we have 8× the batch size
+optimizer.zero_grad()
+
+for step, (images, labels) in enumerate(loader):
+    with autocast():
+        loss = criterion(model(images), labels) / K   # divide — don't skip this
+    scaler.scale(loss).backward()
+    if (step + 1) % K == 0:
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad()</code></pre>
+    <div class="warn">The division by K is not optional. Without it, the gradients accumulate to K times the correct magnitude and training usually diverges.</div>
+
+    <h2 id="s3-dl">DataLoader settings</h2>
+    <p>The GPU can't train faster than the CPU can load data. With <code>num_workers=0</code> (the PyTorch default), the GPU finishes a batch and then sits idle while the CPU loads the next one. On a machine with a decent number of CPU cores, fixing this is often as impactful as any memory optimization.</p>
+    <table>
+      <tr><th>Setting</th><th>Default</th><th>Better value</th><th>What it does</th></tr>
+      <tr><td>num_workers</td><td>0</td><td>2–4 per GPU</td><td>Parallel data loading — GPU stops waiting</td></tr>
+      <tr><td>pin_memory</td><td>False</td><td>True</td><td>~30% faster CPU-to-GPU transfer</td></tr>
+      <tr><td>prefetch_factor</td><td>2</td><td>2–4</td><td>Queues N batches per worker in advance</td></tr>
+      <tr><td>persistent_workers</td><td>False</td><td>True</td><td>Workers survive between epochs</td></tr>
+      <tr><td>drop_last</td><td>False</td><td>True (training)</td><td>Prevents smaller final batch causing OOM</td></tr>
+    </table>
+
+    <h2 id="s3-prefetch">CUDA prefetcher — hiding transfer latency</h2>
+    <p>For maximum GPU utilization, a CUDA prefetcher sends the next batch to the GPU while the current batch is being processed, completely hiding the transfer time.</p>
+    <pre><code>class CUDAPrefetcher:
+    def __init__(self, loader):
+        self.loader = iter(loader)
+        self.stream = torch.cuda.Stream()   # separate stream for transfers
+        self._preload()
+
+    def _preload(self):
+        try:   self.next = next(self.loader)
+        except StopIteration: self.next = None; return
+        with torch.cuda.stream(self.stream):     # transfer while GPU trains
+            self.next = [t.cuda(non_blocking=True) for t in self.next]
+
+    def __next__(self):
+        torch.cuda.current_stream().wait_stream(self.stream)
+        batch = self.next
+        self._preload()          # kick off the next transfer immediately
+        return batch
+
+    def __iter__(self): return self
+
+for images, labels in CUDAPrefetcher(train_loader):
+    ...</code></pre>
+    <p><em>Memory cost: one extra batch held on GPU. At B=32, 256×256, RGB with AMP, that's roughly 25MB — negligible.</em></p>
+
+    <hr class="g-rule">
+    <h1 id="s4">4 — More Advanced Techniques</h1>
+    <p>The things in this section are worth knowing about, but they're not step one. Get AMP and the DataLoader working first.</p>
+
+    <h2 id="s4-ckpt">Gradient checkpointing</h2>
+    <p>During the forward pass, PyTorch saves every intermediate activation so it can use them during backprop. Gradient checkpointing tells it to discard most of these and recompute them during the backward pass instead. You pay ~33% more in compute, but activation memory drops by 40–60%. Right tradeoff when you're memory-bound but not compute-bound.</p>
+    <table class="ftable">
+      <tr><td>Memory saving</td><td><code>M_acts ÷ √L  (approximate)</code><em>L = number of layers. More layers = bigger benefit.</em></td></tr>
+      <tr><td>Compute cost</td><td><code>training time × ~1.33</code><em>Worth it in most cases when memory is the bottleneck.</em></td></tr>
+    </table>
+    <pre><code># HuggingFace models — one line
+model.gradient_checkpointing_enable()
+
+# Custom modules
+from torch.utils.checkpoint import checkpoint
+x = checkpoint(self.layer, x)   # activations recomputed in backward</code></pre>
+
+    <h2 id="s4-freeze">Frozen backbone</h2>
+    <p>When fine-tuning a pretrained model, you usually don't need to update every layer right away. Freezing the backbone means gradients aren't computed for those layers, so their activations don't need to be stored. This can halve the active memory cost.</p>
+    <pre><code>for name, param in model.named_parameters():
+    if 'classifier' not in name and 'head' not in name:
+        param.requires_grad = False
+
+# quick sanity check
+trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+total     = sum(p.numel() for p in model.parameters())
+print(f'Training {trainable/1e6:.1f}M of {total/1e6:.1f}M parameters')</code></pre>
+    <p>A common schedule: freeze everything for a few epochs, then progressively unfreeze deeper layers. The backbone learning rate is usually 5–10× lower than the head.</p>
+    <table>
+      <tr><th>Phase</th><th>Trainable layers</th><th>Memory</th><th>When</th></tr>
+      <tr><td>Head only</td><td>Final layer(s) only</td><td>Minimal</td><td>Epochs 1–3</td></tr>
+      <tr><td>Top blocks + head</td><td>Head + last 2–3 blocks</td><td>Moderate</td><td>Epochs 4–6</td></tr>
+      <tr><td>Full model</td><td>Everything (low LR backbone)</td><td>Full</td><td>Epoch 7+</td></tr>
+    </table>
+
+    <h2 id="s4-compile">torch.compile() — free performance on PyTorch 2.0+</h2>
+    <p>If you're on PyTorch 2.0 or later, this is an easy win. It compiles your model's computation graph ahead of time. The first forward pass is slower (compiling), but everything after is faster — sometimes significantly so.</p>
+    <pre><code>model = torch.compile(model)
+# first forward: slow. everything after: 20-100% faster.
+# skip this during debugging — it makes tracebacks harder to read</code></pre>
+
+    <hr class="g-rule">
+    <h1 id="s5">5 — Classification vs. Segmentation</h1>
+
+    <h2>Classification — the straightforward case</h2>
+    <p>Classification models output a single label per image. They're the most memory-efficient vision task because the model's output is tiny (one number per class) regardless of image size. Sections 0–4 are generally sufficient.</p>
+    <ul>
+      <li><strong>Resolution matters more than you'd expect.</strong> For natural image datasets, there's usually little accuracy difference between 224px and 256px — but the memory difference is real. Start at 224.</li>
+      <li><strong>Frozen backbone fine-tuning works very well</strong> on smaller datasets. Full fine-tuning often overfits without aggressive augmentation.</li>
+      <li><strong>For binary classification,</strong> the activation memory is identical to multi-class — only the final linear layer changes size. Going from 2 to 30 classes has almost no memory impact.</li>
+    </ul>
+
+    <h2 id="s5-seg">Segmentation — considerably more expensive</h2>
+    <p>Segmentation models produce a class label for every pixel. The output tensor alone is <code>batch × height × width × num_classes</code> — for a 512×512 image with 20 classes, that's 20MB per image just for the output. U-Net architectures also hold onto all encoder feature maps for skip connections, which can triple or quadruple memory vs. a comparable classification model.</p>
+    <h3>Patch-based training</h3>
+    <p>For large images, train on random crops of a fixed size. Memory is then bounded by the crop size regardless of original image dimensions.</p>
+    <pre><code>transforms.RandomCrop(512)    # memory is now always B × 512 × 512 × ...
+
+# for inference on full images, stitch predictions with a sliding window:
+def predict_full(model, image, patch=512, overlap=0.25):
+    stride = int(patch * (1 - overlap))
+    preds  = torch.zeros(1, num_classes, *image.shape[-2:]).cuda()
+    counts = torch.zeros(1, 1,           *image.shape[-2:]).cuda()
+    for y in range(0, image.shape[-2]-patch+1, stride):
+        for x in range(0, image.shape[-1]-patch+1, stride):
+            with torch.no_grad(), autocast():
+                p = model(image[:,:,y:y+patch,x:x+patch])
+            preds [:,:,y:y+patch,x:x+patch] += p
+            counts[:,:,y:y+patch,x:x+patch] += 1
+    return preds / counts</code></pre>
+
+    <h2 id="s5-sam">SAM and SAM2</h2>
+    <p>SAM (Segment Anything Model) and SAM2 are foundation models for segmentation that operate at 1024×1024 resolution. A few things to know:</p>
+    <ul>
+      <li><strong>SAM ViT-H at batch=1 uses ~10–12GB</strong> with AMP — inference-only for most consumer GPUs. Fine-tuning requires freezing the image encoder and only training the prompt encoder and mask decoder (~4M of the 636M parameters).</li>
+      <li><strong>SAM2 uses a Hiera backbone</strong> (hierarchical ViT that downsamples like a CNN), making it substantially more memory-efficient than SAM ViT at the same resolution. SAM2-Tiny at batch=1 is in the same range as SAM ViT-B.</li>
+      <li><strong>Always use torch.no_grad() for SAM inference.</strong> It's easy to forget and the cost is enormous at 1024×1024.</li>
+    </ul>
+    <div class="note">The calculator includes presets for SAM ViT-B/L/H and all four SAM2 variants. Use it to check whether your GPU can handle inference at batch=1 before anything else.</div>
+
+    <hr class="g-rule">
+    <h1 id="s6">6 — When Things Go Wrong</h1>
+    <p>OOM errors are rarely mysterious once you've seen a few of them. There are really only about six things that cause them.</p>
+    <table>
+      <tr><th>What happened</th><th>Likely cause</th><th>Fix</th></tr>
+      <tr><td>OOM on the first batch</td><td>Batch size or resolution too large</td><td>Enable AMP first. If still OOM, halve the batch size.</td></tr>
+      <tr><td>OOM partway through epoch</td><td>Variable-size final batch</td><td>Add <code>drop_last=True</code> to DataLoader.</td></tr>
+      <tr><td>Memory climbs every epoch</td><td>Storing raw loss tensors</td><td>Replace <code>append(loss)</code> with <code>append(loss.item())</code>.</td></tr>
+      <tr><td>OOM during validation only</td><td>Missing <code>torch.no_grad()</code></td><td>Wrap all validation code in <code>with torch.no_grad():</code></td></tr>
+      <tr><td>OOM after resolution increase</td><td>Activation memory increased by (new/old)²</td><td>Reduce batch size, or enable gradient checkpointing.</td></tr>
+      <tr><td>OOM with multiple GPUs</td><td>DataParallel master GPU overhead</td><td>Switch to DistributedDataParallel.</td></tr>
+    </table>
+
+    <h2 id="s6-order">The order to try things</h2>
+    <p>When you're hitting OOM and need to reduce memory, apply these in order. Each step is safer and easier than the one after it.</p>
+    <table>
+      <tr><th>#</th><th>Action</th><th>Mem saved</th><th>Speed change</th><th>Risk</th></tr>
+      <tr><td>1</td><td>Enable AMP (autocast + GradScaler)</td><td>35–45%</td><td>+50–200%</td><td>None</td></tr>
+      <tr><td>2</td><td>Fix DataLoader (num_workers, pin_memory, drop_last)</td><td>0%</td><td>Removes GPU idle time</td><td>None</td></tr>
+      <tr><td>3</td><td>Halve batch size</td><td>~40%</td><td>Minor throughput drop</td><td>None</td></tr>
+      <tr><td>4</td><td>Gradient accumulation to keep effective batch size</td><td>~0%</td><td>&lt;1% overhead</td><td>None</td></tr>
+      <tr><td>5</td><td>Reduce resolution by 25% (saves ~44% activation mem)</td><td>~44%</td><td>Faster</td><td>Check accuracy</td></tr>
+      <tr><td>6</td><td>Gradient checkpointing</td><td>40–60%</td><td>−33% slower</td><td>None</td></tr>
+      <tr><td>7</td><td>Freeze backbone</td><td>60–80%</td><td>Much faster</td><td>Watch convergence</td></tr>
+      <tr><td>8</td><td>Adam → Adam 8-bit</td><td>~25% (optim only)</td><td>No change</td><td>None</td></tr>
+      <tr><td>9</td><td>torch.compile()</td><td>0%</td><td>+20–100%</td><td>PyTorch ≥ 2.0 only</td></tr>
+    </table>
+
+    <hr class="g-rule">
+    <h1 id="s7">7 — Quick Reference</h1>
+    <h2>Memory formulas</h2>
+    <table class="ftable">
+      <tr><td>Params (FP32)</td><td><code>N × 4 bytes</code><em>Fixed — doesn't change with batch or resolution.</em></td></tr>
+      <tr><td>Params (AMP)</td><td><code>N × 6 bytes</code><em>FP16 working copy + FP32 master.</em></td></tr>
+      <tr><td>Activations</td><td><code>B × (H×W ÷ sf) × C_avg × L × 2B × 1.5</code><em>sf: CNN=20, Hybrid=10, Transformer=50</em></td></tr>
+      <tr><td>Resolution scales</td><td><code>M_acts × (new_H / old_H)²</code><em>Double the resolution, quadruple the activations.</em></td></tr>
+      <tr><td>Gradient accum</td><td><code>memory = M(B_micro) not M(B_effective)</code><em>B_micro × K = B_effective</em></td></tr>
+      <tr><td>Checkpoint saving</td><td><code>M_acts ÷ √L  (approx)</code><em>At the cost of 33% more compute.</em></td></tr>
+      <tr><td>Adam states</td><td><code>N_trainable × 8 bytes</code><em>Two FP32 running averages per parameter.</em></td></tr>
+      <tr><td>Patch training</td><td><code>M_full × (crop ÷ H)²</code><em>Bounds segmentation memory to the crop size.</em></td></tr>
+    </table>
+
+    <h2>Model reference</h2>
+    <table>
+      <tr><th>Model</th><th>Type</th><th>Params</th><th>Batch=1 AMP</th><th>Batch=32 AMP</th></tr>
+      <tr><td>MobileViT-XXS</td><td>Hybrid</td><td>1.3M</td><td>&lt; 1GB</td><td>~3GB</td></tr>
+      <tr><td>MobileViT-S</td><td>Hybrid</td><td>5.6M</td><td>&lt; 1GB</td><td>~4GB</td></tr>
+      <tr><td>EfficientNet-B1</td><td>CNN</td><td>7.8M</td><td>&lt; 1GB</td><td>~4GB</td></tr>
+      <tr><td>ResNet-50</td><td>CNN</td><td>25.6M</td><td>&lt; 1GB</td><td>~5GB</td></tr>
+      <tr><td>Swin-T</td><td>Hybrid</td><td>28M</td><td>~1GB</td><td>~6GB</td></tr>
+      <tr><td>ViT-Base/16</td><td>Transformer</td><td>86M</td><td>~1GB</td><td>~5GB</td></tr>
+      <tr><td>SAM ViT-B</td><td>Transformer</td><td>89M</td><td>~3GB †</td><td>&gt; 10GB</td></tr>
+      <tr><td>SAM2-Tiny</td><td>Hybrid</td><td>38.9M</td><td>~2GB †</td><td>~7GB</td></tr>
+      <tr><td>SAM2-Large</td><td>Hybrid</td><td>224M</td><td>~5GB †</td><td>&gt; 24GB</td></tr>
+      <tr><td>SAM ViT-H</td><td>Transformer</td><td>636M</td><td>~12GB †</td><td>&gt; 80GB</td></tr>
+      <tr><td>DINOv2 ViT-L</td><td>Transformer</td><td>307M</td><td>~4GB</td><td>~16GB</td></tr>
+      <tr><td>CLIP ViT-L/14</td><td>Transformer</td><td>307M</td><td>~3GB</td><td>~14GB</td></tr>
+    </table>
+    <p><em>† SAM variants use 1024×1024 input resolution. Memory is high even at batch=1.</em></p>
+
+    <h2>Quick decision guide</h2>
+    <table>
+      <tr><th>If you need to…</th><th>Use this</th></tr>
+      <tr><td>Reduce memory immediately, no accuracy risk</td><td>AMP — Section 0, step 1</td></tr>
+      <tr><td>Keep a large effective batch size on a small GPU</td><td>Gradient accumulation — Section 3</td></tr>
+      <tr><td>Speed up data loading</td><td>Fix the DataLoader — Section 3</td></tr>
+      <tr><td>Fine-tune a large pretrained model efficiently</td><td>Frozen backbone schedule — Section 4</td></tr>
+      <tr><td>Train a segmentation model on high-res images</td><td>RandomCrop + sliding window — Section 5</td></tr>
+      <tr><td>Push even further on memory</td><td>Gradient checkpointing + Adam 8-bit</td></tr>
+      <tr><td>Memory grows with every epoch</td><td>Tensor leak — check for loss.item() — Section 0, step 4</td></tr>
+    </table>
+
+    <p style="margin-top:40px;font-size:12px;color:var(--g-mu);font-style:italic;border-top:1px solid var(--g-rule);padding-top:16px">
+      GPU Optimization Guide — use the Calculator tab for specific model and batch size estimates.
+    </p>
+  </div><!-- end g-body -->
+</div><!-- end guide-layout -->
+</div><!-- end guide-panel -->
+
+<script>
+// ── Panel switching ────────────────────────────────────────────────────
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id + '-panel').classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── Calculator logic ───────────────────────────────────────────────────
+const S = { arch:'hybrid', params:1.3, cavg:96, layers:12, prec:'amp', optim:'adam',
+            imgH:256, imgW:256, imgC:3, batch:32, ckpt:false, frozen:false,
+            accum:false, accumK:4, prefetch:false };
+
+const SF  = { cnn:20, hybrid:10, transformer:50 };
+const OVER = 1.5;
+const OX  = { sgd:0, sgdm:4, adam:8, adam8:2, adafactor:0.4 };
+const OL  = { sgd:'SGD', sgdm:'SGD+mom', adam:'Adam/AdamW', adam8:'Adam 8-bit', adafactor:'Adafactor' };
+const AL  = { cnn:'CNN (progressive downsample)', hybrid:'Hybrid CNN+Attention', transformer:'Pure Transformer (patch-based)' };
+const SC  = { params:'#7c5cfc', acts:'#4f9eff', grads:'#22c55e', optim:'#a78bfa', input:'#eab308' };
+const GPUS = [
+  {n:'GTX 1080',v:8},{n:'RTX 3060',v:12},{n:'RTX 4080',v:16},{n:'T4',v:16},
+  {n:'RTX 4090',v:24},{n:'A100 40G',v:40},{n:'A100 80G',v:80},{n:'H100',v:80},
+];
+const PRESETS = [
+  {name:'MobileViT-XXS', cat:'cls',  arch:'hybrid',      params:1.3,  cavg:96,  layers:12, imgH:256,  imgW:256,  cls:'hyb-p', tag:'Hybrid'},
+  {name:'MobileViT-S',   cat:'cls',  arch:'hybrid',      params:5.6,  cavg:128, layers:18, imgH:256,  imgW:256,  cls:'hyb-p', tag:'Hybrid'},
+  {name:'EfficientNet-B1',cat:'cls', arch:'cnn',         params:7.8,  cavg:120, layers:18, imgH:240,  imgW:240,  cls:'cnn-p', tag:'CNN'},
+  {name:'ResNet-50',     cat:'cls',  arch:'cnn',         params:25.6, cavg:200, layers:50, imgH:224,  imgW:224,  cls:'cnn-p', tag:'CNN'},
+  {name:'Swin-T',        cat:'cls',  arch:'hybrid',      params:28,   cavg:192, layers:24, imgH:224,  imgW:224,  cls:'hyb-p', tag:'Hybrid'},
+  {name:'Swin-B',        cat:'cls',  arch:'hybrid',      params:88,   cavg:384, layers:24, imgH:224,  imgW:224,  cls:'hyb-p', tag:'Hybrid'},
+  {name:'ConvNeXt-B',    cat:'cls',  arch:'cnn',         params:89,   cavg:320, layers:27, imgH:224,  imgW:224,  cls:'cnn-p', tag:'CNN'},
+  {name:'ViT-Base/16',   cat:'cls',  arch:'transformer', params:86,   cavg:768, layers:12, imgH:224,  imgW:224,  cls:'xfm-p', tag:'Transformer'},
+  {name:'ViT-Large/16',  cat:'cls',  arch:'transformer', params:307,  cavg:1024,layers:24, imgH:224,  imgW:224,  cls:'xfm-p', tag:'Transformer'},
+  {name:'SAM ViT-B',     cat:'seg',  arch:'transformer', params:89,   cavg:768, layers:12, imgH:1024, imgW:1024, cls:'seg-p', tag:'SAM'},
+  {name:'SAM ViT-L',     cat:'seg',  arch:'transformer', params:308,  cavg:1024,layers:24, imgH:1024, imgW:1024, cls:'seg-p', tag:'SAM'},
+  {name:'SAM ViT-H',     cat:'seg',  arch:'transformer', params:636,  cavg:1280,layers:32, imgH:1024, imgW:1024, cls:'seg-p', tag:'SAM'},
+  {name:'SAM2-Tiny',     cat:'seg',  arch:'hybrid',      params:38.9, cavg:96,  layers:16, imgH:1024, imgW:1024, cls:'seg-p', tag:'SAM2'},
+  {name:'SAM2-Small',    cat:'seg',  arch:'hybrid',      params:46,   cavg:128, layers:20, imgH:1024, imgW:1024, cls:'seg-p', tag:'SAM2'},
+  {name:'SAM2-Base+',    cat:'seg',  arch:'hybrid',      params:80.8, cavg:256, layers:24, imgH:1024, imgW:1024, cls:'seg-p', tag:'SAM2'},
+  {name:'SAM2-Large',    cat:'seg',  arch:'hybrid',      params:224,  cavg:384, layers:32, imgH:1024, imgW:1024, cls:'seg-p', tag:'SAM2'},
+  {name:'Mask2Former',   cat:'seg',  arch:'hybrid',      params:216,  cavg:512, layers:32, imgH:512,  imgW:512,  cls:'seg-p', tag:'Segmentation'},
+  {name:'SegFormer-B5',  cat:'seg',  arch:'hybrid',      params:82,   cavg:512, layers:24, imgH:512,  imgW:512,  cls:'seg-p', tag:'Segmentation'},
+  {name:'DINOv2 ViT-S',  cat:'found',arch:'transformer', params:22,   cavg:384, layers:12, imgH:518,  imgW:518,  cls:'xfm-p', tag:'DINOv2'},
+  {name:'DINOv2 ViT-B',  cat:'found',arch:'transformer', params:86,   cavg:768, layers:12, imgH:518,  imgW:518,  cls:'xfm-p', tag:'DINOv2'},
+  {name:'DINOv2 ViT-L',  cat:'found',arch:'transformer', params:307,  cavg:1024,layers:24, imgH:518,  imgW:518,  cls:'xfm-p', tag:'DINOv2'},
+  {name:'CLIP ViT-B/32', cat:'found',arch:'transformer', params:87,   cavg:768, layers:12, imgH:224,  imgW:224,  cls:'xfm-p', tag:'CLIP'},
+  {name:'CLIP ViT-L/14', cat:'found',arch:'transformer', params:307,  cavg:1024,layers:24, imgH:336,  imgW:336,  cls:'xfm-p', tag:'CLIP'},
+];
+
+function calc() {
+  const N=S.params*1e6, bv=S.prec==='fp32'?4:2,
+        micro=S.accum?Math.max(1,Math.round(S.batch/S.accumK)):S.batch;
+  const bp=S.prec==='fp32'?4:6, paramB=N*bp;
+  const sf=SF[S.arch], tf=S.frozen?.2:1;
+  let actB=micro*(S.imgH*S.imgW/sf)*S.cavg*S.layers*bv*OVER*tf;
+  if(S.ckpt)actB/=Math.sqrt(Math.max(S.layers,1));
+  const bg=S.prec==='fp32'?4:2, gradB=N*tf*bg;
+  const optimB=N*tf*(OX[S.optim]||0);
+  const inputB=micro*S.imgH*S.imgW*S.imgC*bv;
+  const prefB=S.prefetch?inputB:0;
+  return{total:paramB+actB+gradB+optimB+inputB+prefB,paramB,actB,gradB,optimB,inputB,prefB,micro,sf};
+}
+
+const fb=b=>{const g=b/1e9;if(g>=.05)return g.toFixed(2)+' GB';const m=b/1e6;if(m>=1)return m.toFixed(0)+' MB';return(b/1e3).toFixed(0)+' KB'};
+const fg=b=>(b/1e9).toFixed(2);
+
+function render() {
+  const r=calc(), t=r.total/1e9;
+  const col=t<=8?'var(--c-g)':t<=24?'var(--c-y)':'var(--c-r)';
+  document.getElementById('tot').textContent=fg(r.total)+' GB';
+  document.getElementById('tot').style.color=col;
+  document.getElementById('sub').innerHTML=`Micro-batch ${r.micro} · ${S.imgH}×${S.imgW} · ${S.prec.toUpperCase()} · ${OL[S.optim]}<br>${AL[S.arch]}`;
+  const segs=[
+    {k:'params',v:r.paramB,l:'Parameters'},
+    {k:'acts',v:r.actB,l:'Activations'},
+    {k:'grads',v:r.gradB,l:'Gradients'},
+    {k:'optim',v:r.optimB,l:'Optim States'},
+    {k:'input',v:r.inputB+r.prefB,l:'Input/Prefetch'},
+  ];
+  document.getElementById('sb').innerHTML=segs.map(s=>{const p=r.total>0?Math.max(.3,s.v/r.total*100):0;return`<div class="bseg" style="width:${p}%;background:${SC[s.k]}"></div>`}).join('');
+  document.getElementById('leg').innerHTML=segs.map(s=>`<div class="li"><div class="ld" style="background:${SC[s.k]}"></div>${s.l}: ${fb(s.v)}</div>`).join('');
+  document.getElementById('gg').innerHTML=GPUS.map(g=>{const f=t<=g.v*.85,ti=!f&&t<=g.v,c=f?'fits':ti?'tight':'nope',i=f?'✓':ti?'~':'✗';return`<div class="gc ${c}"><div class="gn">${g.n}</div><div class="gv">${g.v}GB</div><div class="gi">${i}</div></div>`}).join('');
+  const bstr=S.prec==='fp32'?'4':'2';
+  document.getElementById('fn').innerHTML=`<strong style="color:var(--c-so)">Activation formula:</strong> <code>B(${r.micro}) × (${S.imgH}×${S.imgW}÷${r.sf}) × C(${S.cavg}) × L(${S.layers}) × ${bstr}B × ${OVER} = ${fb(r.actB)}</code><br>sf=${r.sf} for ${S.arch}. ×${OVER} overhead covers autograd graph & intermediate buffers.`;
+  document.getElementById('bd').innerHTML=segs.map(s=>{const p=r.total>0?Math.max(2,s.v/r.total*100):0;return`<div class="bdr"><div class="bn">${s.l}</div><div class="bw"><div class="bb" style="width:${p}%;background:${SC[s.k]}"></div></div><div class="bval">${fb(s.v)}</div></div>`}).join('');
+  const tips=[];
+  if(S.prec==='fp32')tips.push('<strong>Enable AMP:</strong> halves activation memory, 2–3× faster. Zero risk — do this first.');
+  if(!S.ckpt&&r.actB>r.paramB*4)tips.push('<strong>Gradient checkpointing:</strong> activations dominate — one line cuts them ~55% at +33% compute. <code>model.gradient_checkpointing_enable()</code>');
+  if(!S.frozen&&S.layers>20&&tips.length<3)tips.push('<strong>Frozen backbone:</strong> reduces gradient + optimizer states ~80%. Standard starting point for fine-tuning.');
+  if(S.optim==='adam'&&t>16&&tips.length<3)tips.push('<strong>Adam 8-bit:</strong> drop-in replacement (<code>pip install bitsandbytes</code>), ~75% less optimizer memory, near-identical results.');
+  if(!S.accum&&t>24&&tips.length<3)tips.push('<strong>Gradient accumulation:</strong> memory is set by the micro-batch, not the effective batch. Simulate any batch size you need.');
+  if(!S.prefetch&&tips.length<3)tips.push('<strong>Pin memory + prefetch:</strong> overlap CPU→GPU transfer with compute. Zero memory overhead. Set <code>pin_memory=True, num_workers≥4</code>.');
+  if(tips.length===0)tips.push('Configuration looks efficient. If pushing further, reduce resolution before reducing batch size — resolution cost is quadratic.');
+  document.getElementById('tips').innerHTML=tips.slice(0,3).map(t=>`<div class="ctip">${t}</div>`).join('');
+}
+
+function bindPills(id, key) {
+  document.querySelectorAll(`#${id} .pill`).forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll(`#${id} .pill`).forEach(x=>x.classList.remove('on'));
+      b.classList.add('on'); S[key]=b.dataset.val; render();
+    });
+  });
+}
+bindPills('ag','arch'); bindPills('pg2','prec'); bindPills('og','optim');
+
+[['params','lp',v=>v+' M'],['cavg','lc',v=>Math.round(v)],['layers','ll',v=>Math.round(v)],['batch','lb',v=>Math.round(v)]].forEach(([id,lid,fmt])=>{
+  const el=document.getElementById(id), lb=document.getElementById(lid);
+  el.addEventListener('input',()=>{S[id]=parseFloat(el.value);lb.textContent=fmt(S[id]);render();});
+});
+['imgH','imgW','imgC'].forEach(id=>{
+  document.getElementById(id).addEventListener('change',e=>{S[id]=parseInt(e.target.value)||1;render();});
+});
+document.getElementById('accumK').addEventListener('change',e=>{S.accumK=parseInt(e.target.value)||4;render();});
+
+function tog(f) {
+  S[f]=!S[f];
+  document.getElementById('t-'+f).classList.toggle('on',S[f]);
+  if(f==='accum')document.getElementById('accdet').style.display=S[f]?'flex':'none';
+  render();
+}
+
+// ── Category filter + presets ──────────────────────────────────────────
+let activeCat = 'all';
+function buildPresets() {
+  const c=document.getElementById('pg'); c.innerHTML='';
+  PRESETS.forEach(p=>{
+    const btn=document.createElement('button');
+    btn.className=`pre ${p.cls} ${activeCat==='all'||p.cat===activeCat?'show':''}`;
+    btn.dataset.cat=p.cat;
+    btn.innerHTML=`<div class="pn">${p.name}</div><div class="pm">${p.params}M · ${p.imgH}px</div><div class="pt">${p.tag}</div>`;
+    btn.addEventListener('click',()=>{
+      Object.assign(S,{arch:p.arch,params:p.params,cavg:p.cavg,layers:p.layers,imgH:p.imgH,imgW:p.imgW});
+      document.querySelectorAll('#ag .pill').forEach(b=>b.classList.toggle('on',b.dataset.val===p.arch));
+      [['params','lp',v=>v+' M'],['cavg','lc',v=>v],['layers','ll',v=>v]].forEach(([k,lid,fmt])=>{
+        document.getElementById(k).value=p[k];
+        document.getElementById(lid).textContent=fmt(p[k]);
+      });
+      document.getElementById('imgH').value=p.imgH;
+      document.getElementById('imgW').value=p.imgW;
+      render();
+    });
+    c.appendChild(btn);
+  });
+}
+
+document.querySelectorAll('.cat-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.cat-tab').forEach(t=>t.classList.remove('on'));
+    tab.classList.add('on'); activeCat=tab.dataset.cat;
+    document.querySelectorAll('.pre').forEach(p=>{
+      p.classList.toggle('show', activeCat==='all'||p.dataset.cat===activeCat);
+    });
+  });
+});
+
+buildPresets();
+render();
+</script>
+</body>
+</html>
