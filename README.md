@@ -2,7 +2,7 @@
 
 A practical reference for training PyTorch vision models without running out of GPU memory. Written for people who are new to GPU training (no systems background assumed).
 
-**[→ Live demo on GitHub Pages](https://YOUR-USERNAME.github.io/YOUR-REPO-NAME/)**
+**[→ Live demo on GitHub Pages](https://m-wisell.github.io/GPU-Memory-Calculator-Optimization-Guide/)**
 
 ---
 
